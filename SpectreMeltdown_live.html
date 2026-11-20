@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Transient Execution Lab (Copy)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE work: a lab instrument for a live talk to professionals
+   IDEA the control-room console of a CPU core: readouts, pipeline, cache bank, scope trace
+   PICTURE the machine itself: ROB entries going transient then squashed, a 16x16 cache bank lighting up, a 256-bar timing trace with one dip
+   COLOUR steel panel, black ink, white, alarm red for anything secret or transient; night #16191c
+   TYPE Inter Tight 700 + Inter, JetBrains Mono for code and bytes
+   LAYOUT title and controls across the top, leaked-secret readout as a full-width strip, then two columns: core (code, predictor, ROB) and cache (bank, trace); stacked on phones */
+:root{color-scheme:light dark;--bg:light-dark(#d5dbe0,#16191c);--panel:light-dark(#ffffff,#1f2327);--ink:light-dark(#0c0d0e,#eef1f3);--mute:light-dark(#5a636b,#97a1aa);--line:light-dark(#b9c1c8,#343a40);--red:#e8251a;--redt:light-dark(#c41b11,#ff5a4f);--strip:light-dark(#0c0d0e,#0a0b0c);--cold:light-dark(#e9edf0,#2a2f34)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.5 Inter,system-ui,sans-serif;overflow-x:clip}
+.band{padding:clamp(18px,3vw,36px) max(4vw,16px)}
+.wrap{max-width:1240px;margin:0 auto}
+h1{font:700 clamp(30px,4vw,46px)/1.05 "Inter Tight",Inter,sans-serif;letter-spacing:-.02em;margin:0 0 6px;text-wrap:balance}
+.sub{margin:0;color:var(--mute);max-width:68ch}
+.top{display:flex;flex-wrap:wrap;gap:18px 32px;align-items:end;justify-content:space-between}
+.tabs{display:flex;border:1px solid var(--ink);border-radius:8px;overflow:hidden}
+.tabs button{border:0;border-radius:0;background:transparent;color:var(--ink);padding:10px 18px;font:600 15px Inter,sans-serif;min-height:44px;cursor:pointer}
+.tabs button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+.ctl{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;margin-top:18px}
+button.b{min-height:44px;padding:0 16px;border-radius:8px;border:1px solid var(--ink);background:var(--panel);color:var(--ink);font:600 15px Inter,sans-serif;cursor:pointer}
+button.b:hover{background:var(--cold)}
+button.b.go{background:var(--red);border-color:var(--red);color:#fff}
+button:focus-visible,input:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+label.t{display:flex;gap:8px;align-items:center;font-size:15px;cursor:pointer;min-height:44px}
+label.t input{width:20px;height:20px;accent-color:var(--red)}
+.spd{display:flex;gap:8px;align-items:center;font-size:15px}
+input[type=range]{accent-color:var(--red);width:110px}
+input[type=text]{font:16px "JetBrains Mono",monospace;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);width:min(260px,100%)}
+.strip{background:var(--strip);color:#fff}
+.ro{display:flex;flex-wrap:wrap;gap:4px;margin:10px 0 8px}
+.ch{width:clamp(26px,3.6vw,44px);text-align:center;border-bottom:3px solid #3a4046;padding:4px 0 2px}
+.ch b{display:block;font:600 clamp(20px,2.8vw,34px)/1.1 "JetBrains Mono",monospace;color:#6c757d}
+.ch i{display:block;font:400 11px/1.4 "JetBrains Mono",monospace;font-style:normal;color:#8b959e}
+.ch.ok b{color:#fff}.ch.ok{border-color:var(--red)}
+.ch.bad b{color:var(--red)}
+.ch.cur{border-color:#fff;animation:bl 1s steps(2) infinite}
+@keyframes bl{50%{border-color:transparent}}
+.rohead{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 20px;font-size:15px;color:#c7ced4}
+.rohead strong{color:#fff;font:700 20px "Inter Tight",sans-serif}
+.note{margin-top:10px;background:#1d2125;border-left:4px solid var(--red);padding:12px 16px;font-size:16px;color:#e9edf0;min-height:3.2em}
+.phases{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.phases span{font-size:13px;padding:4px 10px;border-radius:20px;border:1px solid #3a4046;color:#8b959e}
+.phases span.on{background:var(--red);border-color:var(--red);color:#fff}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:18px}
+@media(max-width:900px){.grid{grid-template-columns:minmax(0,1fr)}}
+.pn{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin-bottom:18px}
+.pn h2{font:600 18px/1.2 "Inter Tight",sans-serif;margin:0 0 10px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.pn h2 small{font:400 13px Inter,sans-serif;color:var(--mute)}
+pre{margin:0;overflow-x:auto;font:14px/1.7 "JetBrains Mono",monospace}
+pre div{padding:0 8px;border-radius:4px;white-space:pre}
+pre div.a{background:var(--cold);box-shadow:inset 3px 0 var(--ink)}
+pre div.s{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--red) 16%,transparent) 0 6px,transparent 6px 12px);box-shadow:inset 3px 0 var(--red);color:var(--redt)}
+pre .c{color:var(--mute)}
+.pred{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.pred div{border:1px solid var(--line);border-radius:6px;padding:8px 6px;text-align:center;font-size:13px;color:var(--mute)}
+.pred div.on{background:var(--ink);color:var(--bg);border-color:var(--ink);font-weight:600}
+.kv{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:6px 14px;font-size:15px}
+.kv dt{color:var(--mute)}.kv dd{margin:0;font-weight:600}
+.kv dd.r{color:var(--redt)}
+.rob{display:flex;flex-direction:column;gap:6px;min-height:150px}
+.rob .e{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font:14px "JetBrains Mono",monospace}
+.rob .e em{font:600 12px Inter,sans-serif;font-style:normal;padding:2px 8px;border-radius:10px;align-self:start;white-space:nowrap;border:1px solid currentColor}
+.rob .e small{grid-column:1/-1;font:13px Inter,sans-serif;color:var(--mute)}
+.e.wait{border-style:dashed}
+.e.spec{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--red) 14%,transparent) 0 6px,transparent 6px 12px);border-color:var(--red);color:var(--redt)}
+.e.sq{opacity:.55}.e.sq span{text-decoration:line-through}
+.e.blocked{color:var(--mute);border-style:dotted}
+.e.fault{background:var(--red);border-color:var(--red);color:#fff}.e.fault small{color:#ffe1de}
+.e.ret em{color:var(--mute)}
+.bank{display:grid;grid-template-columns:22px repeat(16,minmax(0,1fr));gap:3px;font:11px "JetBrains Mono",monospace;color:var(--mute)}
+.bank .h{text-align:center;align-self:end}
+.bank .rh{align-self:center}
+.bank .l{aspect-ratio:1;background:var(--cold);border-radius:3px;transition:background .25s}
+.bank .l.hot{background:var(--ink)}
+.bank .l.leak{background:var(--red);box-shadow:0 0 0 2px var(--panel),0 0 0 4px var(--red)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;color:var(--mute);margin-top:10px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:2px;vertical-align:-1px;margin-right:6px}
+.fig{position:relative;height:220px}.fig>svg{position:absolute;inset:0;width:100%;height:100%}
+svg text{font:13px Inter,sans-serif;fill:var(--mute);paint-order:stroke;stroke:var(--panel);stroke-width:4px}
+.cand{font-size:14px;color:var(--mute);margin-top:6px;min-height:1.5em}
+.foot{font-size:13px;color:var(--mute)}
+kbd{font:12px "JetBrains Mono",monospace;border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+@media(prefers-reduced-motion:reduce){.ch.cur{animation:none}.bank .l{transition:none}}
+</style>
+</head>
+<body>
+<header class="band"><div class="wrap">
+ <div class="top">
+  <div>
+   <h1>Transient execution, step by step</h1>
+   <p class="sub">A deterministic model of Spectre v1 and Meltdown. Watch a secret leave the CPU through the cache, one byte at a time, without ever being read architecturally.</p>
+  </div>
+  <div class="tabs" role="group" aria-label="Attack">
+   <button id="tSp" aria-pressed="true">Spectre v1</button>
+   <button id="tMd" aria-pressed="false">Meltdown</button>
+  </div>
+ </div>
+ <div class="ctl">
+  <button class="b go" id="bPlay">Play</button>
+  <button class="b" id="bStep">Step</button>
+  <button class="b" id="bFF">Leak the rest</button>
+  <button class="b" id="bReset">Reset</button>
+  <span class="spd"><label for="spd">Speed</label><input type="range" id="spd" min="1" max="10" value="4"></span>
+  <label class="t"><input type="checkbox" id="mit"><span id="mitL">Mitigation: lfence after bounds check</span></label>
+  <label class="t"><input type="checkbox" id="noise">Realistic noise</label>
+  <span class="spd"><label for="sec">Secret</label><input type="text" id="sec" maxlength="28" spellcheck="false"></span>
+ </div>
+</div></header>
+
+<section class="band strip"><div class="wrap">
+ <div class="rohead"><span>Attacker's view: bytes recovered through cache timing</span><strong id="cnt">0 / 0</strong></div>
+ <div class="ro" id="ro"></div>
+ <div class="phases" id="ph"></div>
+ <div class="note" id="note" aria-live="polite"></div>
+</div></section>
+
+<main class="band"><div class="wrap grid">
+ <div>
+  <div class="pn"><h2><span id="codeT">Victim code</span><small id="codeS">gadget the attacker calls</small></h2><pre id="code"></pre></div>
+  <div class="pn" id="stateP"><h2><span id="stT">Branch predictor</span><small id="stS">2-bit saturating counter</small></h2><div id="st"></div></div>
+  <div class="pn"><h2><span>Reorder buffer</span><small>what the core is doing right now</small></h2><div class="rob" id="rob"></div></div>
+ </div>
+ <div>
+  <div class="pn"><h2><span>Probe array in cache</span><small>256 lines, one per byte value, 4096 B apart</small></h2>
+   <div class="bank" id="bank"></div>
+   <div class="legend"><span><i style="background:var(--cold)"></i>not cached</span><span><i style="background:var(--ink)"></i>cached</span><span><i style="background:var(--red)"></i>warmed by the transient load</span></div>
+  </div>
+  <div class="pn"><h2><span>Flush+Reload timing</span><small>load latency per probe line, cycles</small></h2>
+   <div class="fig"><svg id="chart" role="img" aria-label="Load latency for each of 256 probe lines"></svg></div>
+   <div class="cand" id="cand"></div>
+  </div>
+  <p class="foot">Keys: <kbd>→</kbd> step, <kbd>Space</kbd> play or pause. A teaching model: nothing here relies on your CPU speculating.</p>
+ </div>
+</div></main>
+
+<script>
+{
+const $=s=>document.getElementById(s);
+const PUB=16,TH=150,KBASE=0xffffffff81a00000n;
+const DEF={spectre:'Squeamish-Ossifrage!',meltdown:'r00t:x:0:0:MELTDOWN'};
+const sec={...DEF};
+let S,seed,timer=null;
+const rnd=()=>(seed=seed*16807%2147483647)/2147483647;
+const hex=v=>'0x'+v.toString(16).padStart(2,'0');
+const chr=v=>v>32&&v<127?String.fromCharCode(v):'·';
+const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+const CODE={
+ spectre:['<span class="c">// victim: kernel, browser, or another process</span>','void victim(size_t x) {','  if (x < array1_size)','    y &= probe[array1[x] * 4096];','}'],
+ meltdown:['<span class="c">; attacker, running in user mode</span>','mov  al, byte [kernel_addr]','shl  rax, 12','mov  rbx, qword [probe + rax]','<span class="c">; #PF is only delivered here, at retire</span>']
+};
+const PH={spectre:['Train','Flush','Call','Transient','Squash','Reload'],meltdown:['Flush','Load','Transient','Retire + #PF','Reload']};
+function reset(){
+ seed=7;stop();
+ S={mode:S?.mode||'spectre',i:0,p:0,ctr:0,hot:new Set(),leak:-1,rob:[],code:-1,spec:false,lat:null,rec:[],ph:-1,cand:'',perm:'idle',exc:'none',pred:'',done:false,mit:$('mit').checked,noise:$('noise').checked,
+  note:S?.mode==='meltdown'?'Press Play. The attacker will read kernel memory from user mode, one byte at a time.':'Press Play. The attacker will make the victim read past the end of array1, where a secret sits, one byte at a time.'};
+ render();
+}
+const v=()=>sec[S.mode].charCodeAt(S.i)&255;
+function phases(){
+ if(S.mode==='spectre'){const tr=S.i===0?[0,1,2,3,4,5].map(k=>()=>train(k,1)):[()=>train(0,6)];return [...tr,flush,spCall,spTrans,spSquash,reload]}
+ return [flush,mdLoad,mdTrans,mdRetire,reload];
+}
+function train(k,n){
+ S.ph=0;for(let j=0;j<n;j++){S.hot.add((k+j)%PUB);S.ctr=Math.min(3,S.ctr+1)}
+ const x=(k+n-1)%PUB;S.code=3;S.spec=false;S.leak=-1;
+ S.rob=[{t:`cmp x=${x}, array1_size`,s:'ret'},{t:'jae skip',s:'ret',n:'not taken: in bounds'},{t:`load array1[${x}] → ${x}`,s:'ret'},{t:`load probe[${x}×4096]`,s:'ret'}];
+ S.note=n>1?`Training: 6 legal calls with in-bounds x. The predictor saturates at “strongly in-bounds”.`:`Training call ${k+1} of 6: x = ${x} is in bounds, so the branch is not taken. The predictor counter moves toward “in-bounds”. The legal access also caches probe line ${x}, which is why the attacker flushes next.`;
+}
+function flush(){
+ S.ph=S.mode==='spectre'?1:0;S.hot.clear();S.leak=-1;S.lat=null;S.cand='';S.code=-1;S.perm='idle';S.exc='none';
+ S.rob=[{t:'clflush probe[0..255]',s:'ret'}].concat(S.mode==='spectre'?[{t:'clflush &array1_size',s:'ret',n:'so the bounds check must wait for DRAM'}]:[]);
+ S.note=S.mode==='spectre'?'Flush: evict all 256 probe lines, and evict array1_size itself. The bounds check will now take hundreds of cycles to resolve, which is the window the attack needs.':'Flush: evict all 256 probe lines so that only the transient access can warm one of them.';
+}
+function spCall(){
+ S.ph=2;const x=PUB+S.i,p=S.ctr>=2;S.pred=p;S.code=2;S.spec=false;
+ S.rob=[{t:`cmp x=${x}, array1_size`,s:'wait',n:'array1_size missed in cache: ~300 cycles to resolve'},{t:'jae skip',s:p?'spec':'wait',n:p?'predicted not taken: the front end runs ahead':'predictor says out of bounds: no speculation'}];
+ S.note=`Attack call: x = ${x}, out of bounds. array1[${x}] is really secret[${S.i}]. The check is stuck waiting on memory, and the predictor (state ${S.ctr}) guesses ${p?'“in-bounds”':'“out of bounds”'}.`;
+}
+function spTrans(){
+ S.ph=3;const x=PUB+S.i;
+ if(S.mit){S.rob.push({t:'lfence',s:'wait',n:'serialises: no later load starts until the branch resolves'},{t:`load array1[${x}]`,s:'blocked'});S.code=2;S.note='With lfence after the check, nothing executes in the shadow of the branch. No secret-dependent load, so no cache footprint.';return}
+ if(!S.pred){S.note='No misprediction, so no transient window.';return}
+ const b=v();S.hot.add(b);S.leak=b;S.code=3;S.spec=true;
+ S.rob.push({t:`load array1[${x}] → ${hex(b)} '${chr(b)}'`,s:'spec',n:'out-of-bounds read of the secret'},{t:`load probe[${hex(b)}×4096]`,s:'spec',n:`brings probe line ${b} into the cache`});
+ S.note=`Transient window: the core reads array1[${x}], which is the secret byte, and uses it as an index into probe. Line ${b} (${hex(b)}) is now cached.`;
+}
+function spSquash(){
+ S.ph=4;S.ctr=Math.max(0,S.ctr-1);S.code=-1;
+ S.rob=S.rob.map(e=>e.t.startsWith('cmp')?{...e,s:'ret',n:'resolved: x ≥ array1_size'}:e.t.startsWith('jae')?{...e,s:'ret',n:S.pred?'mispredicted: pipeline flushed':'resolved'}:e.s==='spec'?{...e,s:'sq',n:'squashed: result never retires'}:e.s==='wait'||e.s==='blocked'?{...e,s:'sq',n:'squashed'}:e);
+ S.note=S.leak>=0?'The bounds check resolves: out of bounds. Registers are rolled back and the secret never becomes architectural state. The cache line is not rolled back.':'The bounds check resolves and the core carries on. The cache holds nothing secret-dependent.';
+}
+function mdLoad(){
+ S.ph=1;const a='0x'+(KBASE+BigInt(S.i)).toString(16);S.code=1;S.spec=true;
+ if(S.mit){S.perm='kernel page not mapped (KPTI)';S.rob=[{t:`mov al, [${a}]`,s:'wait',n:'no translation in the user page tables: no data to forward'}];S.note='With KPTI the kernel is not mapped while user code runs. The load cannot find the data, so there is nothing to pass to dependent instructions.';return}
+ const b=v();S.perm='U/S check pending, data forwarded';
+ S.rob=[{t:`mov al, [${a}] → ${hex(b)}`,s:'spec',n:'supervisor-only page, but the data arrives before the check is enforced'}];
+ S.note='User code loads a kernel address. On affected cores the permission fault is only raised at retirement, and the loaded byte is forwarded to dependent instructions first.';
+}
+function mdTrans(){
+ S.ph=2;S.code=3;
+ if(S.mit){S.rob.push({t:'shl rax, 12',s:'blocked',n:'nothing to work on'});S.note='No secret value, so the dependent probe load has nothing to encode.';return}
+ const b=v();S.hot.add(b);S.leak=b;S.spec=true;
+ S.rob.push({t:'shl rax, 12',s:'spec'},{t:`mov rbx, [probe + ${hex(b)}000]`,s:'spec',n:`brings probe line ${b} into the cache`});
+ S.note=`Dependent instructions run transiently: the kernel byte ${hex(b)} becomes an offset into probe, and line ${b} is cached.`;
+}
+function mdRetire(){
+ S.ph=3;S.code=4;S.spec=false;S.exc='#PF → SIGSEGV, caught by handler';
+ S.rob=S.rob.map((e,j)=>j===0?{...e,s:'fault',n:'reaches retirement: page fault raised'}:{...e,s:'sq',n:'squashed'});
+ S.note='The faulting load retires: page fault, everything after it is squashed. The attacker’s signal handler (or a TSX abort) swallows the crash and continues. The cache line survives.';
+}
+function reload(){
+ S.ph=S.mode==='spectre'?5:4;S.code=-1;S.spec=false;
+ const R=S.noise?9:1,sc=new Array(256).fill(0);let lat,hot;
+ for(let r=0;r<R;r++){
+  hot=new Set();if(S.leak>=0&&(!S.noise||rnd()<.8))hot.add(S.leak);
+  if(S.noise)for(let j=0;j<2;j++)hot.add(Math.floor(rnd()*256));
+  lat=Array.from({length:256},(_,k)=>hot.has(k)?45+rnd()*(S.noise?70:40):(S.noise?175:230)+rnd()*(S.noise?160:90));
+  lat.forEach((l,k)=>{if(l<TH)sc[k]++});
+ }
+ S.lat=lat;S.hot=hot;
+ const ord=sc.map((s,k)=>[s,k]).sort((a,b)=>b[0]-a[0]),best=ord[0][0]>=(S.noise?4:1)?ord[0][1]:-1;
+ S.rec[S.i]=best;
+ S.cand=S.noise?'Hits over 9 rounds: '+ord.slice(0,3).filter(o=>o[0]>0).map(o=>`${hex(o[1])} '${chr(o[1])}' ×${o[0]}`).join(', ')||'no hits':'';
+ S.rob=[{t:'for k in shuffled(0..255): rdtscp; load probe[k×4096]; rdtscp',s:'ret',n:'shuffled order defeats the stride prefetcher'}];
+ S.note=best>=0?`Reload: one line answers in under ${TH} cycles. Line ${best} → byte ${S.i} is ${hex(best)} '${chr(best)}'.${S.noise?' With noise on, stray lines are warm too, so the attacker repeats the round and votes.':''}`:`Reload: no line is fast${S.noise?' often enough':''}. Byte ${S.i} cannot be recovered.`;
+}
+function step(){
+ if(S.done)return;
+ const L=phases();L[S.p]();S.p++;
+ if(S.p>=L.length){S.p=0;S.i++;if(S.i>=sec[S.mode].length){S.done=true;stop();const n=S.rec.filter(x=>x>=0).length;S.note+=` Done: ${n} of ${S.rec.length} bytes leaked${S.mit?' with the mitigation on':''}.`}}
+ render();
+}
+function play(){if(S.done)reset();if(timer)return stop();$('bPlay').textContent='Pause';const tick=()=>{step();if(!S.done)timer=setTimeout(tick,2600/(+$('spd').value))};tick()}
+function stop(){clearTimeout(timer);timer=null;$('bPlay').textContent='Play'}
+function ff(){stop();let g=0;while(!S.done&&g++<2000)step()}
+function render(){
+ const m=S.mode,s=sec[m];
+ $('tSp').setAttribute('aria-pressed',m==='spectre');$('tMd').setAttribute('aria-pressed',m==='meltdown');
+ $('mitL').textContent=m==='spectre'?'Mitigation: lfence after bounds check':'Mitigation: KPTI (kernel page-table isolation)';
+ $('cnt').textContent=`${S.rec.filter(x=>x>=0).length} / ${s.length}`;
+ $('ro').innerHTML=[...s].map((c,k)=>{const r=S.rec[k];if(k<S.rec.length)return r>=0?`<div class="ch ok"><b>${esc(chr(r))}</b><i>${r.toString(16).padStart(2,'0')}</i></div>`:`<div class="ch bad"><b>?</b><i>--</i></div>`;return `<div class="ch${k===S.i&&!S.done?' cur':''}"><b>_</b><i>&nbsp;</i></div>`}).join('');
+ $('ph').innerHTML=PH[m].map((p,k)=>`<span class="${k===S.ph?'on':''}">${p}</span>`).join('');
+ $('note').textContent=S.note;
+ $('codeT').textContent=m==='spectre'?'Victim code':'Attacker code';
+ $('codeS').textContent=m==='spectre'?'the gadget the attacker calls':'no victim cooperation needed';
+ $('code').innerHTML=CODE[m].map((l,k)=>`<div class="${k===S.code?(S.spec?'s':'a'):''}">${l.startsWith('<')?l:esc(l)}</div>`).join('');
+ if(m==='spectre'){$('stT').textContent='Branch predictor';$('stS').textContent='2-bit saturating counter for “x < array1_size”';
+  $('st').innerHTML='<div class="pred">'+['Strongly out','Weakly out','Weakly in','Strongly in'].map((t,k)=>`<div class="${k===S.ctr?'on':''}">${t}</div>`).join('')+'</div>';}
+ else{$('stT').textContent='Protection state';$('stS').textContent='where the check sits in the pipeline';
+  $('st').innerHTML=`<dl class="kv"><dt>Permission check</dt><dd class="${S.perm.includes('pending')?'r':''}">${S.perm}</dd><dt>Exception</dt><dd class="${S.exc!=='none'?'r':''}">${S.exc}</dd><dt>Kernel address</dt><dd>0x${(KBASE+BigInt(Math.min(S.i,s.length-1))).toString(16)}</dd></dl>`;}
+ const tag={ret:'retired',wait:'waiting',spec:'transient',sq:'squashed',blocked:'blocked',fault:'#PF'};
+ $('rob').innerHTML=S.rob.length?S.rob.map(e=>`<div class="e ${e.s}"><span>${esc(e.t)}</span><em>${tag[e.s]}</em>${e.n?`<small>${esc(e.n)}</small>`:''}</div>`).join(''):'<div class="foot">Empty. Press Step to begin.</div>';
+ let b='<span></span>'+[...Array(16)].map((_,k)=>`<span class="h">${k.toString(16)}</span>`).join('');
+ for(let r=0;r<16;r++){b+=`<span class="rh">${r.toString(16)}x</span>`;for(let c=0;c<16;c++){const k=r*16+c;b+=`<div class="l${S.hot.has(k)?(k===S.leak?' leak':' hot'):''}" title="line ${k} ${hex(k)} '${chr(k)}'"></div>`}}
+ $('bank').innerHTML=b;$('cand').textContent=S.cand;draw();
+}
+const sv=$('chart');
+function draw(){
+ const W=sv.clientWidth,H=sv.clientHeight;if(!W)return;
+ const ml=W<520?34:44,mr=10,mt=16,mb=26,pw=W-ml-mr,ph=H-mt-mb,max=400,y=v=>mt+ph*(1-v/max),bw=pw/256;
+ let o='';
+ for(const t of [0,100,200,300,400])o+=`<line x1="${ml}" x2="${W-mr}" y1="${y(t)}" y2="${y(t)}" stroke="var(--line)" stroke-width="${t?0.5:1}"/><text x="${ml-6}" y="${y(t)+4}" text-anchor="end">${t}</text>`;
+ for(const t of (W<520?[0,128,255]:[0,64,128,192,255]))o+=`<text x="${ml+(t+.5)*bw}" y="${H-6}" text-anchor="middle">${hex(t)}</text>`;
+ if(S.lat){
+  let mi=0;S.lat.forEach((l,k)=>{const f=l<TH?'var(--red)':'var(--mute)';o+=`<rect x="${ml+k*bw}" y="${y(l)}" width="${Math.max(bw-.6,.6)}" height="${y(0)-y(l)}" fill="${f}" opacity="${l<TH?1:.45}"/>`;if(l<S.lat[mi])mi=k});
+  if(S.lat[mi]<TH){const x=ml+(mi+.5)*bw,lx=Math.min(Math.max(x,ml+70),W-mr-70);o+=`<line x1="${x}" x2="${lx}" y1="${y(S.lat[mi])-4}" y2="${mt+14}" stroke="var(--red)"/><text x="${lx}" y="${mt+10}" text-anchor="middle" style="fill:var(--redt);font-weight:600">${hex(mi)} '${esc(chr(mi))}' ${Math.round(S.lat[mi])} cyc</text>`}
+ }else o+=`<text x="${ml+pw/2}" y="${mt+ph/2}" text-anchor="middle">Timing appears at the Reload step</text>`;
+ o+=`<line x1="${ml}" x2="${W-mr}" y1="${y(TH)}" y2="${y(TH)}" stroke="var(--ink)" stroke-dasharray="4 4"/><text x="${W-mr}" y="${y(TH)-6}" text-anchor="end">hit threshold ${TH}</text>`;
+ sv.innerHTML=o;
+}
+new ResizeObserver(draw).observe(sv);
+function mode(m){S.mode=m;$('sec').value=sec[m];reset()}
+$('tSp').onclick=()=>mode('spectre');$('tMd').onclick=()=>mode('meltdown');
+$('bPlay').onclick=play;$('bStep').onclick=()=>{stop();step()};$('bFF').onclick=ff;$('bReset').onclick=reset;
+$('mit').onchange=()=>reset();
+$('noise').onchange=e=>{S.noise=e.target.checked};
+$('sec').oninput=e=>{sec[S.mode]=e.target.value||DEF[S.mode];reset()};
+document.addEventListener('keydown',e=>{if(e.target.tagName==='INPUT'&&e.target.type==='text')return;if(e.key==='ArrowRight'){e.preventDefault();stop();step()}else if(e.key===' '){e.preventDefault();play()}});
+$('sec').value=sec.spectre;reset();
+}
+</script>
+</body>
+</html>
