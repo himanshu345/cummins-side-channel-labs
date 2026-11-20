@@ -9,6 +9,7 @@ attacks. For authorized security education only.
 |---|---|
 | `microarch_lab_students.zip` | **Part A — Microarchitectural.** Jupyter notebooks (with TODO stubs) to build Flush+Reload, Spectre v1 and Meltdown against a deterministic model, plus a real-hardware Flush+Reload bonus in C (Linux/x86). Runs on any OS. |
 | `acoustic_lab_students.zip` | **Part B — Acoustic.** Jupyter notebooks (with TODO stubs) to recover keypad numbers, typed words and sentences from sound, judge whether a result is real, and test defences. Includes the recordings. |
+| `Acoustic_All_Demos.zip` | **Instructor demo pack (acoustic).** Ready-to-run, fully worked demos shown live in class: keypad-tone (DTMF) decoding, app-usage classification, a CPU-instruction "doctor", and typed-sentence recovery. MATLAB + Python/Jupyter, with the recordings and expected outputs included. These are demonstrations, not the student exercises. |
 | `flush-reload-demo_i9.zip` | A self-contained demo that reproduces the Yarom & Falkner (USENIX 2014) Flush+Reload cache attack and recovers an RSA private key from a locally-built, deliberately-vulnerable GnuPG 1.4.13. Uses a throwaway key in a sandbox; the host's real keyring is never touched. Needs Intel + Hyper-Threading on bare-metal Linux. |
 
 Each zip contains its own `README.md` with setup and instructions.
